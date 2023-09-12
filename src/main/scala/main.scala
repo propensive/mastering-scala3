@@ -13,7 +13,7 @@ object Opaques:
     def apply(name: String): DiskFile = name
     given FromString[DiskFile] = identity(_)
 
-  def process[ResultType](file: DiskFile)(block: FileChannel ?=> ResultType): ResultType =
+  extension (file: DiskFile) def process[ResultType](block: FileChannel ?=> ResultType): ResultType =
     val reader: RandomAccessFile = RandomAccessFile(file, "r")
     val channel: FileChannel = reader.getChannel()
 
@@ -21,11 +21,11 @@ object Opaques:
       reader.close()
       channel.close()
 
-export Opaques.DiskFile, Opaques.process
+export Opaques.DiskFile
 
 @main
 def run(file: DiskFile): Unit =
-  process(file):
+  file.process:
     read().foreach(println)
 
 inline def channel: FileChannel = summonInline[FileChannel]
