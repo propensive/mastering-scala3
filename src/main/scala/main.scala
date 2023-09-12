@@ -26,13 +26,15 @@ object Opaques:
 
 export Opaques.DiskFile
 
+object Parser:
+  given string: Parser[String] = _.mkString
+
 trait Parser[+DataType]:
   def parse(string: String): DataType
 
 @main
 def run(file: DiskFile): Unit =
-  file.process:
-    read().foreach(println)
+  println(file.readAs[String]())
 
 inline def channel: FileChannel = summonInline[FileChannel]
 
