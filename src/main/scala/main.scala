@@ -13,15 +13,21 @@ object Opaques:
     def apply(name: String): DiskFile = name
     given FromString[DiskFile] = identity(_)
 
-  extension (file: DiskFile) def process[ResultType](block: FileChannel ?=> ResultType): ResultType =
-    val reader: RandomAccessFile = RandomAccessFile(file, "r")
-    val channel: FileChannel = reader.getChannel().nn
+  extension (file: DiskFile)
+    def readAs[DataType]()(using parser: Parser[DataType]): DataType = process(parser.parse(read().mkString))
 
-    try block(using channel) finally
-      reader.close()
-      channel.close()
+    def process[ResultType](block: FileChannel ?=> ResultType): ResultType =
+      val reader: RandomAccessFile = RandomAccessFile(file, "r")
+      val channel: FileChannel = reader.getChannel().nn
+
+      try block(using channel) finally
+        reader.close()
+        channel.close()
 
 export Opaques.DiskFile
+
+trait Parser[+DataType]:
+  def parse(string: String): DataType
 
 @main
 def run(file: DiskFile): Unit =
