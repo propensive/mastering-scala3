@@ -43,6 +43,7 @@ def run(file: DiskFile): Unit =
   catch
     case error: DiskError     => println("The file could not be read from disk")
     case error: NotFoundError => println("The file was not found")
+    case error: TsvError      => println("The TSV file contained rows of different lengths")
 
 inline def channel: FileChannel = summonInline[FileChannel]
 
