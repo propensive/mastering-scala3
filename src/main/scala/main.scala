@@ -17,10 +17,12 @@ object Opaques:
     def readAs[DataType]()(using parser: Parser[DataType]): DataType = process(parser.parse(read().mkString))
 
     def process[ResultType](block: FileChannel ?=> ResultType): ResultType =
-      val reader: RandomAccessFile = RandomAccessFile(file, "r")
+      val reader: RandomAccessFile = try RandomAccessFile(file, "r") catch case error: Exception => throw NotFoundError()
       val channel: FileChannel = reader.getChannel().nn
 
-      try block(using channel) finally
+      try block(using channel)
+      catch case error: Exception => throw DiskError()
+      finally
         reader.close()
         channel.close()
 
@@ -34,7 +36,7 @@ trait Parser[+DataType]:
 
 @main
 def run(file: DiskFile): Unit =
-  println(file.readAs[String]())
+  println(file.readAs[Tsv]())
 
 inline def channel: FileChannel = summonInline[FileChannel]
 
@@ -47,3 +49,15 @@ def read()(using FileChannel): List[String] =
     else List()
 
   recur()
+
+object Tsv:
+  def parse(string: String): Tsv =
+    val rows = string.split("\n").nn.to(List).map(_.nn)
+    Tsv(rows.map(_.split("\t").nn.to(List).map(_.nn)))
+
+  given Parser[Tsv] = parse(_)
+
+case class Tsv(data: List[List[String]])
+
+case class DiskError() extends Exception
+case class NotFoundError() extends Exception
