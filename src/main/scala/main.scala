@@ -6,14 +6,25 @@ import scala.util.chaining.*
 import scala.compiletime.*
 import scala.util.CommandLineParser.FromString
 
-object DiskFile:
-  given FromString[DiskFile] = DiskFile(_)
+object Opaques:
+  opaque type DiskFile = String
 
-case class DiskFile(filename: String)
+  object DiskFile:
+    def apply(name: String): DiskFile = name
+    given FromString[DiskFile] = identity(_)
+
+  def process[ResultType](file: DiskFile)(block: FileChannel ?=> ResultType): ResultType =
+    val reader: RandomAccessFile = RandomAccessFile(file, "r")
+    val channel: FileChannel = reader.getChannel()
+
+    try block(using channel) finally
+      reader.close()
+      channel.close()
+
+export Opaques.DiskFile, Opaques.process
 
 @main
-def run(filename: String): Unit =
-  val file = DiskFile(filename)
+def run(file: DiskFile): Unit =
   process(file):
     read().foreach(println)
 
@@ -28,11 +39,3 @@ def read()(using FileChannel): List[String] =
     else List()
 
   recur()
-
-def process[ResultType](file: DiskFile)(block: FileChannel ?=> ResultType): ResultType =
-  val reader: RandomAccessFile = RandomAccessFile(file.filename, "r")
-  val channel: FileChannel = reader.getChannel()
-
-  try block(using channel) finally
-    reader.close()
-    channel.close()
