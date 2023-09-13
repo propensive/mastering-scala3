@@ -46,9 +46,10 @@ def run(file: DiskFile): Unit =
     println(records(1))
     println(records(1).age)
   catch
-    case error: DiskError     => println("The file could not be read from disk")
-    case error: NotFoundError => println("The file was not found")
-    case error: TsvError      => println("The TSV file contained rows of different lengths")
+    case error: DiskError         => println("The file could not be read from disk")
+    case error: NotFoundError     => println("The file was not found")
+    case error: TsvError          => println("The TSV file contained rows of different lengths")
+    case error: UnknownFieldError => println(s"The field ${error.field} does not exist")
 
 inline def channel: FileChannel = summonInline[FileChannel]
 
@@ -76,7 +77,8 @@ object Tsv:
 
 case class Row(indices: Map[String, Int], row: IArray[String]) extends Dynamic:
   def apply(field: String): String = row(indices(field))
-  def selectDynamic(field: String): String = apply(field)
+  def selectDynamic(field: String): String throws UnknownFieldError =
+    if indices.contains(field) then apply(field) else throw UnknownFieldError(field)
 
 case class Tsv(headings: List[String], rows: List[IArray[String]]):
   private val indices: Map[String, Int] = headings.zipWithIndex.to(Map)
@@ -84,4 +86,5 @@ case class Tsv(headings: List[String], rows: List[IArray[String]]):
 
 case class DiskError() extends Exception
 case class NotFoundError() extends Exception
+case class UnknownFieldError(field: String) extends Exception
 case class TsvError() extends Exception
