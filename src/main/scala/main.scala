@@ -7,6 +7,7 @@ import scala.compiletime.*
 import scala.util.CommandLineParser.FromString
 
 import scala.language.experimental.saferExceptions
+import scala.language.experimental.erasedDefinitions
 import scala.language.dynamics
 
 object Opaques:
@@ -72,11 +73,11 @@ def read()(using FileChannel): List[String] =
   recur()
 
 object TypedField:
-  given role: TypedField["role", Role] = new TypedField["role", Role] {}
-  given name: TypedField["name", String] = new TypedField["name", String] {}
-  given age: TypedField["age", Int] = new TypedField["age", Int] {}
+  erased given role: TypedField["role", Role] = erasedValue
+  erased given name: TypedField["name", String] = erasedValue
+  erased given age: TypedField["age", Int] = erasedValue
 
-trait TypedField[NameType <: String & Singleton, ReturnType]
+erased trait TypedField[NameType <: String & Singleton, ReturnType]
 
 object Tsv:
   def parse(string: String): Tsv throws TsvError =
