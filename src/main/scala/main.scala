@@ -50,7 +50,7 @@ def run(file: DiskFile): Unit =
     val records = file.readAs[Tsv]()
     println(records(0))
     println(records(1))
-    println(records(0).role[Role])
+    println(records(0).role)
   catch
     case error: DiskError         => println("The file could not be read from disk")
     case error: NotFoundError     => println("The file was not found")
@@ -71,6 +71,13 @@ def read()(using FileChannel): List[String] =
 
   recur()
 
+object TypedField:
+  given role: TypedField["role", Role] = new TypedField["role", Role] {}
+  given name: TypedField["name", String] = new TypedField["name", String] {}
+  given age: TypedField["age", Int] = new TypedField["age", Int] {}
+
+trait TypedField[NameType <: String & Singleton, ReturnType]
+
 object Tsv:
   def parse(string: String): Tsv throws TsvError =
     val rows = string.split("\n").nn.to(List).map(_.nn)
@@ -86,7 +93,7 @@ object Tsv:
 case class Row(indices: Map[String, Int], row: IArray[String]) extends Dynamic:
   def apply(field: String): String = row(indices(field))
   
-  def selectDynamic[FieldType: Parser](field: "name" | "age" | "role"): FieldType =
+  def selectDynamic[FieldType](field: "name" | "age" | "role")(using TypedField[field.type, FieldType])(using Parser[FieldType]): FieldType =
     apply(field).parseAs[FieldType]
 
 case class Tsv(headings: List[String], rows: List[IArray[String]]):
