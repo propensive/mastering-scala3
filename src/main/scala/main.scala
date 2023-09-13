@@ -39,7 +39,11 @@ trait Parser[+DataType]:
 
 @main
 def run(file: DiskFile): Unit =
-  try println(file.readAs[Tsv]())
+  try
+    val records = file.readAs[Tsv]()
+    println(records(0))
+    println(records(1))
+    println(records(1)("age"))
   catch
     case error: DiskError     => println("The file could not be read from disk")
     case error: NotFoundError => println("The file was not found")
@@ -65,11 +69,16 @@ object Tsv:
     // check if all rows have the same length
     if data.map(_.length).to(Set).size != 1 then throw TsvError()
 
-    Tsv(data)
+    Tsv(data.head, data.tail)
 
   given (Parser[Tsv] throws TsvError) = parse(_)
 
-case class Tsv(data: List[List[String]])
+case class Row(indices: Map[String, Int], row: List[String]):
+  def apply(field: String): String = row(indices(field))
+
+case class Tsv(headings: List[String], rows: List[List[String]]):
+  private val indices: Map[String, Int] = headings.zipWithIndex.to(Map)
+  def apply(n: Int): Row = Row(indices, rows(n))
 
 case class DiskError() extends Exception
 case class NotFoundError() extends Exception
