@@ -17,8 +17,8 @@ object Opaques:
     given FromString[DiskFile] = identity(_)
 
   extension (file: DiskFile)
-    def readAs[DataType]()(using parser: Parser[DataType]): DataType throws NotFoundError | DiskError =
-      process(parser.parse(read().mkString))
+    def readAs[DataType: Parser](): DataType throws NotFoundError | DiskError =
+      process(read().mkString.parseAs[DataType])
 
     def process[ResultType](block: FileChannel ?=> ResultType): ResultType throws NotFoundError | DiskError =
       val reader: RandomAccessFile = try RandomAccessFile(file, "r") catch case error: Exception => throw NotFoundError()
@@ -37,6 +37,9 @@ object Parser:
 
 trait Parser[+DataType]:
   def parse(string: String): DataType
+
+extension (string: String)
+  def parseAs[ResultType](using parser: Parser[ResultType]): ResultType = parser.parse(string)
 
 @main
 def run(file: DiskFile): Unit =
