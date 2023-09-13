@@ -72,12 +72,10 @@ def read()(using FileChannel): List[String] =
 
   recur()
 
-object TypedField:
-  erased given role: TypedField["role", Role] = erasedValue
-  erased given name: TypedField["name", String] = erasedValue
-  erased given age: TypedField["age", Int] = erasedValue
-
-erased trait TypedField[NameType <: String & Singleton, ReturnType]
+type TypedField[NameType <: "role" | "name" | "age"] = NameType match
+  case "role" => Role
+  case "name" => String
+  case "age"  => Int
 
 object Tsv:
   def parse(string: String): Tsv throws TsvError =
@@ -94,8 +92,8 @@ object Tsv:
 case class Row(indices: Map[String, Int], row: IArray[String]) extends Dynamic:
   def apply(field: String): String = row(indices(field))
   
-  def selectDynamic[FieldType](field: "name" | "age" | "role")(using TypedField[field.type, FieldType])(using Parser[FieldType]): FieldType =
-    apply(field).parseAs[FieldType]
+  def selectDynamic(field: "name" | "age" | "role")(using Parser[TypedField[field.type]]): TypedField[field.type] =
+    apply(field).parseAs[TypedField[field.type]]
 
 case class Tsv(headings: List[String], rows: List[IArray[String]]):
   private val indices: Map[String, Int] = headings.zipWithIndex.to(Map)
