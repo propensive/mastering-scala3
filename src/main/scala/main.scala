@@ -49,9 +49,12 @@ extension (string: String)
 def run(file: DiskFile): Unit =
   try
     val records = file.readAs[Tsv]()
-    println(records(0))
-    println(records(1))
-    println(records(0).role)
+    type MyRow = Row { def name: String; def age: Int; def role: Role }
+    val record0 = records(0).asInstanceOf[MyRow]
+    val record1 = records(1).asInstanceOf[MyRow]
+    println(record0)
+    println(record1)
+    println(record0.role)
   catch
     case error: DiskError         => println("The file could not be read from disk")
     case error: NotFoundError     => println("The file was not found")
@@ -72,30 +75,30 @@ def read()(using FileChannel): List[String] =
 
   recur()
 
-type TypedField[NameType <: "role" | "name" | "age"] = NameType match
-  case "role" => Role
-  case "name" => String
-  case "age"  => Int
-
 object Tsv:
-  def parse(string: String): Tsv throws TsvError =
+  def parse(string: String): Tsv throws TsvError | BadIntError | BadRoleError =
     val rows = string.split("\n").nn.to(List).map(_.nn)
     val data = rows.map(_.split("\t").nn.to(List).map(_.nn))
 
     // check if all rows have the same length
     if data.map(_.length).to(Set).size != 1 then throw TsvError()
 
-    Tsv(data.head, data.tail.map(IArray.from(_)))
+    val data2 = data.tail.map: cells =>
+      data.head.zip(cells).map: (field, value) =>
+        field match
+          case "role" => value.parseAs[Role]
+          case "name" => value.parseAs[String]
+          case "age"  => value.parseAs[Int]
 
-  given (Parser[Tsv] throws TsvError) = parse(_)
+    Tsv(data.head, data2.map(IArray.from(_)))
 
-case class Row(indices: Map[String, Int], row: IArray[String]) extends Dynamic:
-  def apply(field: String): String = row(indices(field))
-  
-  def selectDynamic(field: "name" | "age" | "role")(using Parser[TypedField[field.type]]): TypedField[field.type] =
-    apply(field).parseAs[TypedField[field.type]]
+  given (Parser[Tsv] throws TsvError | BadIntError | BadRoleError) = parse(_)
 
-case class Tsv(headings: List[String], rows: List[IArray[String]]):
+case class Row(indices: Map[String, Int], row: IArray[Any]) extends Selectable:
+  def apply(field: String): Any = row(indices(field))
+  def selectDynamic(field: String): Any = apply(field)
+
+case class Tsv(headings: List[String], rows: List[IArray[Any]]):
   private val indices: Map[String, Int] = headings.zipWithIndex.to(Map)
   def apply(n: Int): Row = Row(indices, rows(n))
 
