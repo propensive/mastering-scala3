@@ -9,7 +9,7 @@ def run(filename: String): Unit =
   process(filename):
     read().foreach(println)
 
-def channel(using FileChannel): FileChannel = summon[FileChannel]
+inline def channel: FileChannel = summonInline[FileChannel]
 
 def read()(using FileChannel): List[String] =
   val buffer: ByteBuffer = ByteBuffer.allocate(channel.size().toInt.min(10))
