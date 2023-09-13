@@ -7,6 +7,7 @@ import scala.compiletime.*
 import scala.util.CommandLineParser.FromString
 
 import scala.language.experimental.saferExceptions
+import scala.language.dynamics
 
 object Opaques:
   opaque type DiskFile = String
@@ -43,7 +44,7 @@ def run(file: DiskFile): Unit =
     val records = file.readAs[Tsv]()
     println(records(0))
     println(records(1))
-    println(records(1)("age"))
+    println(records(1).age)
   catch
     case error: DiskError     => println("The file could not be read from disk")
     case error: NotFoundError => println("The file was not found")
@@ -73,8 +74,9 @@ object Tsv:
 
   given (Parser[Tsv] throws TsvError) = parse(_)
 
-case class Row(indices: Map[String, Int], row: IArray[String]):
+case class Row(indices: Map[String, Int], row: IArray[String]) extends Dynamic:
   def apply(field: String): String = row(indices(field))
+  def selectDynamic(field: String): String = apply(field)
 
 case class Tsv(headings: List[String], rows: List[IArray[String]]):
   private val indices: Map[String, Int] = headings.zipWithIndex.to(Map)
