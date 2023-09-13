@@ -6,6 +6,8 @@ import scala.util.chaining.*
 import scala.compiletime.*
 import scala.util.CommandLineParser.FromString
 
+import scala.language.experimental.saferExceptions
+
 object Opaques:
   opaque type DiskFile = String
 
@@ -14,9 +16,10 @@ object Opaques:
     given FromString[DiskFile] = identity(_)
 
   extension (file: DiskFile)
-    def readAs[DataType]()(using parser: Parser[DataType]): DataType = process(parser.parse(read().mkString))
+    def readAs[DataType]()(using parser: Parser[DataType]): DataType throws NotFoundError | DiskError =
+      process(parser.parse(read().mkString))
 
-    def process[ResultType](block: FileChannel ?=> ResultType): ResultType =
+    def process[ResultType](block: FileChannel ?=> ResultType): ResultType throws NotFoundError | DiskError =
       val reader: RandomAccessFile = try RandomAccessFile(file, "r") catch case error: Exception => throw NotFoundError()
       val channel: FileChannel = reader.getChannel().nn
 
@@ -36,7 +39,10 @@ trait Parser[+DataType]:
 
 @main
 def run(file: DiskFile): Unit =
-  println(file.readAs[Tsv]())
+  try println(file.readAs[Tsv]())
+  catch
+    case error: DiskError     => println("The file could not be read from disk")
+    case error: NotFoundError => println("The file was not found")
 
 inline def channel: FileChannel = summonInline[FileChannel]
 
