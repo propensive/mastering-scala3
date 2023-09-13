@@ -48,10 +48,10 @@ extension (string: String)
 @main
 def run(file: DiskFile): Unit =
   try
-    val records = file.readAs[Tsv]()
     type MyRow = Row { def name: String; def age: Int; def role: Role }
-    val record0 = records(0).asInstanceOf[MyRow]
-    val record1 = records(1).asInstanceOf[MyRow]
+    val records = file.readAs[Tsv[MyRow]]()
+    val record0 = records(0)
+    val record1 = records(1)
     println(record0)
     println(record1)
     println(record0.role)
@@ -76,7 +76,7 @@ def read()(using FileChannel): List[String] =
   recur()
 
 object Tsv:
-  def parse(string: String): Tsv throws TsvError | BadIntError | BadRoleError =
+  def parse[RowType <: Row](string: String): Tsv[RowType] throws TsvError | BadIntError | BadRoleError =
     val rows = string.split("\n").nn.to(List).map(_.nn)
     val data = rows.map(_.split("\t").nn.to(List).map(_.nn))
 
@@ -92,15 +92,16 @@ object Tsv:
 
     Tsv(data.head, data2.map(IArray.from(_)))
 
-  given (Parser[Tsv] throws TsvError | BadIntError | BadRoleError) = parse(_)
+  given [RowType <: Row]: (Parser[Tsv[RowType]] throws TsvError | BadIntError | BadRoleError) =
+    parse[RowType](_)
 
 case class Row(indices: Map[String, Int], row: IArray[Any]) extends Selectable:
   def apply(field: String): Any = row(indices(field))
   def selectDynamic(field: String): Any = apply(field)
 
-case class Tsv(headings: List[String], rows: List[IArray[Any]]):
+case class Tsv[RowType <: Row](headings: List[String], rows: List[IArray[Any]]):
   private val indices: Map[String, Int] = headings.zipWithIndex.to(Map)
-  def apply(n: Int): Row = Row(indices, rows(n))
+  def apply(n: Int): RowType = Row(indices, rows(n)).asInstanceOf[RowType]
 
 object Role:
   given (Parser[Role] throws BadRoleError) = try valueOf(_) catch Exception => throw BadRoleError()
