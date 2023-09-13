@@ -69,14 +69,14 @@ object Tsv:
     // check if all rows have the same length
     if data.map(_.length).to(Set).size != 1 then throw TsvError()
 
-    Tsv(data.head, data.tail)
+    Tsv(data.head, data.tail.map(IArray.from(_)))
 
   given (Parser[Tsv] throws TsvError) = parse(_)
 
-case class Row(indices: Map[String, Int], row: List[String]):
+case class Row(indices: Map[String, Int], row: IArray[String]):
   def apply(field: String): String = row(indices(field))
 
-case class Tsv(headings: List[String], rows: List[List[String]]):
+case class Tsv(headings: List[String], rows: List[IArray[String]]):
   private val indices: Map[String, Int] = headings.zipWithIndex.to(Map)
   def apply(n: Int): Row = Row(indices, rows(n))
 
