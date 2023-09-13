@@ -50,12 +50,13 @@ def run(file: DiskFile): Unit =
     val records = file.readAs[Tsv]()
     println(records(0))
     println(records(1))
-    println(records(1).age[Int])
+    println(records(0).role[Role])
   catch
     case error: DiskError         => println("The file could not be read from disk")
     case error: NotFoundError     => println("The file was not found")
     case error: TsvError          => println("The TSV file contained rows of different lengths")
     case error: BadIntError       => println(s"The value ${error.string} is not a valid integer")
+    case error: BadRoleError      => println(s"The row contained an invalid role")
     case error: UnknownFieldError => println(s"The field ${error.field} does not exist")
 
 inline def channel: FileChannel = summonInline[FileChannel]
@@ -91,8 +92,16 @@ case class Tsv(headings: List[String], rows: List[IArray[String]]):
   private val indices: Map[String, Int] = headings.zipWithIndex.to(Map)
   def apply(n: Int): Row = Row(indices, rows(n))
 
+object Role:
+  given (Parser[Role] throws BadRoleError) = try valueOf(_) catch Exception => throw BadRoleError()
+
+enum Role:
+  case Trainer, Developer, President
+
 case class DiskError() extends Exception
 case class NotFoundError() extends Exception
 case class UnknownFieldError(field: String) extends Exception
 case class TsvError() extends Exception
 case class BadIntError(string: String) extends Exception
+case class BadRoleError() extends Exception
+
