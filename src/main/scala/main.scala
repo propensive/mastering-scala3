@@ -57,13 +57,19 @@ def read()(using FileChannel): List[String] =
   recur()
 
 object Tsv:
-  def parse(string: String): Tsv =
+  def parse(string: String): Tsv throws TsvError =
     val rows = string.split("\n").nn.to(List).map(_.nn)
-    Tsv(rows.map(_.split("\t").nn.to(List).map(_.nn)))
+    val data = rows.map(_.split("\t").nn.to(List).map(_.nn))
 
-  given Parser[Tsv] = parse(_)
+    // check if all rows have the same length
+    if data.map(_.length).to(Set).size != 1 then throw TsvError()
+
+    Tsv(data)
+
+  given (Parser[Tsv] throws TsvError) = parse(_)
 
 case class Tsv(data: List[List[String]])
 
 case class DiskError() extends Exception
 case class NotFoundError() extends Exception
+case class TsvError() extends Exception
