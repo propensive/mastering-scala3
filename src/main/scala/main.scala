@@ -85,8 +85,9 @@ object Tsv:
 
 case class Row(indices: Map[String, Int], row: IArray[String]) extends Dynamic:
   def apply(field: String): String = row(indices(field))
-  def selectDynamic[FieldType: Parser](field: String): FieldType throws UnknownFieldError =
-    if indices.contains(field) then apply(field).parseAs[FieldType] else throw UnknownFieldError(field)
+  
+  def selectDynamic[FieldType: Parser](field: "name" | "age" | "role"): FieldType =
+    apply(field).parseAs[FieldType]
 
 case class Tsv(headings: List[String], rows: List[IArray[String]]):
   private val indices: Map[String, Int] = headings.zipWithIndex.to(Map)
