@@ -4,6 +4,7 @@ import java.io.*, java.nio.*, file.*, channels.*, charset.*
 
 import scala.util.chaining.*
 import scala.compiletime.*
+import scala.quoted.*
 import scala.util.CommandLineParser.FromString
 
 import scala.language.experimental.saferExceptions
@@ -14,7 +15,8 @@ object Opaques:
   opaque type DiskFile = String
 
   object DiskFile:
-    def apply(name: String): DiskFile = name
+    def unsafe(name: String): DiskFile = name
+    inline def apply(inline name: String): DiskFile = ${Macros.checkPath('name)}
     given FromString[DiskFile] = identity(_)
 
   extension (file: DiskFile)
@@ -44,26 +46,6 @@ trait Parser[+DataType]:
 
 extension (string: String)
   def parseAs[ResultType](using parser: Parser[ResultType]): ResultType = parser.parse(string)
-
-@main
-def run(): Unit =
-  try
-    val file = path"records.tsv"
-    type MyRow = Row { def name: String; def age: Int; def role: Role }
-    val records = file.readAs[Tsv[MyRow]]()
-    val record0 = records(0)
-    val record1 = records(1)
-    println(record0)
-    println(record1)
-    println(record0.role)
-  catch
-    case error: DiskError         => println("The file could not be read from disk")
-    case error: NotFoundError     => println("The file was not found")
-    case error: TsvError          => println("The TSV file contained rows of different lengths")
-    case error: BadIntError       => println(s"The value ${error.string} is not a valid integer")
-    case error: BadRoleError      => println(s"The row contained an invalid role")
-    case error: BadFilenameError  => println(s"The filename is not valid")
-    case error: UnknownFieldError => println(s"The field ${error.field} does not exist")
 
 inline def channel: FileChannel = summonInline[FileChannel]
 
@@ -106,15 +88,20 @@ case class Tsv[RowType <: Row](headings: List[String], rows: List[IArray[Any]]):
   def apply(n: Int): RowType = Row(indices, rows(n)).asInstanceOf[RowType]
 
 object Role:
-  given (Parser[Role] throws BadRoleError) = try valueOf(_) catch Exception => throw BadRoleError()
+  given (using CanThrow[BadRoleError]): Parser[Role] = try valueOf(_) catch Exception => throw BadRoleError()
 
 enum Role:
   case Trainer, Developer, President
 
 extension (context: StringContext)
   def path(): DiskFile throws BadFilenameError =
-    if context.parts.head.matches("[.a-z]+") then DiskFile(context.parts.head)
+    if context.parts.head.matches("[.a-z]+") then DiskFile.unsafe(context.parts.head)
     else throw BadFilenameError()
+
+object Macros:
+  def checkPath(path: Expr[String])(using Quotes): Expr[DiskFile] =
+    if path.valueOrAbort.matches("[.a-z]+") then '{DiskFile.unsafe($path)}
+    else quotes.reflect.report.errorAndAbort("Not a valid filename")
 
 case class DiskError() extends Exception
 case class NotFoundError() extends Exception
