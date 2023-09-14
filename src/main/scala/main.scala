@@ -8,15 +8,15 @@ import scala.util.chaining.*
 def run(filename: String): Unit =
   read(filename).foreach(println)
 
-def read(filename: String): List[String] =
+def read(filename: String): LazyList[String] =
   val reader: RandomAccessFile = RandomAccessFile(filename, "r")
   val channel: FileChannel = reader.getChannel()
   val buffer: ByteBuffer = ByteBuffer.allocate(channel.size().toInt.min(10))
 
-  def recur(): List[String] =
+  def recur(): LazyList[String] =
     if channel.read(buffer) > 0
-    then String(buffer.array(), 0, buffer.position).tap { _ => buffer.clear() } :: recur()
-    else List()
+    then String(buffer.array(), 0, buffer.position).tap { _ => buffer.clear() } #:: recur()
+    else LazyList()
 
   try recur() finally
     reader.close()
