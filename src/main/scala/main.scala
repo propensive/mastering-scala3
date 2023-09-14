@@ -6,10 +6,10 @@ import scala.util.chaining.*
 
 @main
 def run(filename: String): Unit =
-  process(filename): channel =>
-    read(channel).foreach(println)
+  process(filename):
+    read().foreach(println)
 
-def read(channel: FileChannel): List[String] =
+def read()(using channel: FileChannel): List[String] =
   val buffer: ByteBuffer = ByteBuffer.allocate(channel.size().toInt.min(10))
 
   def recur(): List[String] =
@@ -19,10 +19,10 @@ def read(channel: FileChannel): List[String] =
 
   recur()
 
-def process[ResultType](filename: String)(block: FileChannel => ResultType): ResultType =
+def process[ResultType](filename: String)(block: FileChannel ?=> ResultType): ResultType =
   val reader: RandomAccessFile = RandomAccessFile(filename, "r")
   val channel: FileChannel = reader.getChannel()
 
-  try block(channel) finally
+  try block(using channel) finally
     reader.close()
     channel.close()
