@@ -6,11 +6,10 @@ import scala.util.chaining.*
 
 @main
 def run(filename: String): Unit =
-  read(filename).foreach(println)
+  process(filename): channel =>
+    read(channel).foreach(println)
 
-def read(filename: String): List[String] =
-  val reader: RandomAccessFile = RandomAccessFile(filename, "r")
-  val channel: FileChannel = reader.getChannel()
+def read(channel: FileChannel): List[String] =
   val buffer: ByteBuffer = ByteBuffer.allocate(channel.size().toInt.min(10))
 
   def recur(): List[String] =
@@ -18,6 +17,12 @@ def read(filename: String): List[String] =
     then String(buffer.array(), 0, buffer.position).tap { _ => buffer.clear() } :: recur()
     else List()
 
-  try recur() finally
+  recur()
+
+def process[ResultType](filename: String)(block: FileChannel => ResultType): ResultType =
+  val reader: RandomAccessFile = RandomAccessFile(filename, "r")
+  val channel: FileChannel = reader.getChannel()
+
+  try block(channel) finally
     reader.close()
     channel.close()
