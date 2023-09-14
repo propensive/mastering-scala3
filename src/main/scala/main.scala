@@ -15,7 +15,7 @@ object Opaques:
 
   extension (file: DiskFile) def process[ResultType](block: FileChannel ?=> ResultType): ResultType =
     val reader: RandomAccessFile = RandomAccessFile(file, "r")
-    val channel: FileChannel | Null = reader.getChannel()
+    val channel: FileChannel = reader.getChannel().nn
 
     try block(using channel) finally
       reader.close()
@@ -31,7 +31,7 @@ def run(file: DiskFile): Unit =
 inline def channel: FileChannel = summonInline[FileChannel]
 
 def read()(using FileChannel): List[String] =
-  val buffer: ByteBuffer | Null = ByteBuffer.allocate(channel.size().toInt.min(10))
+  val buffer: ByteBuffer = ByteBuffer.allocate(channel.size().toInt.min(10)).nn
 
   def recur(): List[String] =
     if channel.read(buffer) > 0
