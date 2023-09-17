@@ -60,30 +60,21 @@ def read()(using FileChannel): List[String] =
   recur()
 
 object Tsv:
-  def parse[RowType <: Row](string: String): Tsv[RowType] throws TsvError | BadIntError | BadRoleError =
+  def parse[RowType](string: String): Tsv[RowType] throws TsvError =
     val rows = string.split("\n").nn.to(List).map(_.nn)
     val data = rows.map(_.split("\t").nn.to(List).map(_.nn))
 
     // check if all rows have the same length
     if data.map(_.length).to(Set).size != 1 then throw TsvError()
 
-    val data2 = data.tail.map: cells =>
-      data.head.zip(cells).map: (field, value) =>
-        field match
-          case "role" => value.parseAs[Role]
-          case "name" => value.parseAs[String]
-          case "age"  => value.parseAs[Int]
+    Tsv(data.head, data.tail.map(IArray.from(_)))
 
-    Tsv(data.head, data2.map(IArray.from(_)))
+  given [RowType]: (Parser[Tsv[RowType]] throws TsvError) = parse[RowType](_)
 
-  given [RowType <: Row]: (Parser[Tsv[RowType]] throws TsvError | BadIntError | BadRoleError) =
-    parse[RowType](_)
+case class Row(indices: Map[String, Int], row: IArray[String]):
+  def apply(field: String): String = row(indices(field))
 
-case class Row(indices: Map[String, Int], row: IArray[Any]) extends Selectable:
-  def apply(field: String): Any = row(indices(field))
-  def selectDynamic(field: String): Any = apply(field)
-
-case class Tsv[RowType <: Row](headings: List[String], rows: List[IArray[Any]]):
+case class Tsv[RowType](headings: List[String], rows: List[IArray[String]]):
   private val indices: Map[String, Int] = headings.zipWithIndex.to(Map)
   def apply(n: Int): RowType = Row(indices, rows(n)).asInstanceOf[RowType]
 

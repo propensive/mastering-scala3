@@ -12,7 +12,6 @@ def run(): Unit =
     val record1 = records(1)
     println(record0)
     println(record1)
-    println(record0.role)
   catch
     case error: DiskError         => println("The file could not be read from disk")
     case error: NotFoundError     => println("The file was not found")
