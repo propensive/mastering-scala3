@@ -16,8 +16,7 @@ object Opaques:
   opaque type DiskFile = String
 
   object DiskFile:
-    def unsafe(name: String): DiskFile = name
-    inline def apply(inline name: String): DiskFile = ${Macros.checkPath('name)}
+    def apply(name: String): DiskFile = name
     given FromString[DiskFile] = identity(_)
 
   extension (file: DiskFile)
@@ -97,15 +96,17 @@ object Role:
 enum Role:
   case Trainer, Developer, President
 
-extension (context: StringContext)
-  def path(): DiskFile throws BadFilenameError =
-    if context.parts.head.matches("[.a-z]+") then DiskFile.unsafe(context.parts.head)
-    else throw BadFilenameError()
+extension (inline context: StringContext)
+  inline def path(): DiskFile = ${Macros.checkPath('context)}
 
 object Macros:
-  def checkPath(path: Expr[String])(using Quotes): Expr[DiskFile] =
-    if path.valueOrAbort.matches("[.a-z]+") then '{DiskFile.unsafe($path)}
+  def checkPath(context: Expr[StringContext])(using Quotes): Expr[DiskFile] =
+    import quotes.reflect.*
+    val filename = context.valueOrAbort.parts.head
+    
+    if filename.matches("[.a-z]+") then '{DiskFile(${Expr(filename)})}
     else quotes.reflect.report.errorAndAbort("Not a valid filename")
+    
 
 case class DiskError() extends Exception
 case class NotFoundError() extends Exception
