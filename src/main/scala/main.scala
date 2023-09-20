@@ -1,6 +1,6 @@
 package training
 
-import java.io.*, java.nio.*, file.*, channels.*, charset.*
+import java.io.*, java.nio.*, file.*, channels.*, charset.*, java.net.*
 
 import scala.util.chaining.*
 import scala.compiletime.*
@@ -97,14 +97,17 @@ enum Role:
   case Trainer, Developer, President
 
 extension (inline context: StringContext)
-  inline def path(): DiskFile = ${Macros.checkPath('context)}
+  transparent inline def path(): DiskFile | URL = ${Macros.checkPath('context)}
 
 object Macros:
-  def checkPath(context: Expr[StringContext])(using Quotes): Expr[DiskFile] =
+  def checkPath(context: Expr[StringContext])(using Quotes): Expr[DiskFile | URL] =
     import quotes.reflect.*
-    val filename = context.valueOrAbort.parts.head
+    val path = context.valueOrAbort.parts.head
     
-    if filename.matches("[.a-z]+") then '{DiskFile(${Expr(filename)})}
+    if path.startsWith("http") then
+      try URL(path) catch Exception => quotes.reflect.report.errorAndAbort("Not a valid URL")
+      '{URL(${Expr(path)})}
+    else if path.matches("[.a-z]+") then '{DiskFile(${Expr(path)})}
     else quotes.reflect.report.errorAndAbort("Not a valid filename")
     
 
