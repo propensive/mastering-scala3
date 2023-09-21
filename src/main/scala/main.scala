@@ -34,6 +34,9 @@ export Opaques.DiskFile
 
 object Parser:
   given string: Parser[String] = _.mkString
+  
+  given int: (Parser[Int] throws BadIntError) = string =>
+    try string.toInt catch Exception => throw BadIntError(string)
 
 trait Parser[+DataType]:
   def parse(string: String): DataType
@@ -47,11 +50,12 @@ def run(file: DiskFile): Unit =
     val records = file.readAs[Tsv]()
     println(records(0))
     println(records(1))
-    println(records(1).age)
+    println(records(1).age[Int])
   catch
     case error: DiskError         => println("The file could not be read from disk")
     case error: NotFoundError     => println("The file was not found")
     case error: TsvError          => println("The TSV file contained rows of different lengths")
+    case error: BadIntError       => println(s"The value ${error.string} is not a valid integer")
     case error: UnknownFieldError => println(s"The field ${error.field} does not exist")
 
 inline def channel: FileChannel = summonInline[FileChannel]
@@ -80,8 +84,8 @@ object Tsv:
 
 case class Row(indices: Map[String, Int], row: IArray[String]) extends Dynamic:
   def apply(field: String): String = row(indices(field))
-  def selectDynamic(field: String): String throws UnknownFieldError =
-    if indices.contains(field) then apply(field) else throw UnknownFieldError(field)
+  def selectDynamic[FieldType: Parser](field: String): FieldType throws UnknownFieldError =
+    if indices.contains(field) then apply(field).parseAs[FieldType] else throw UnknownFieldError(field)
 
 case class Tsv(headings: List[String], rows: List[IArray[String]]):
   private val indices: Map[String, Int] = headings.zipWithIndex.to(Map)
@@ -91,3 +95,4 @@ case class DiskError() extends Exception
 case class NotFoundError() extends Exception
 case class UnknownFieldError(field: String) extends Exception
 case class TsvError() extends Exception
+case class BadIntError(string: String) extends Exception
