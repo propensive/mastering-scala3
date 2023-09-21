@@ -9,7 +9,11 @@ def run(): Unit =
   try
     val file = path"records.tsv"
     type MyRow = Row { def name: String; def age: Int; def role: Role }
-    val records = file.readAs[List]()
+    val records = file.readAs[Tsv[MyRow]]()
+    val record0 = records(0).as[Employee]
+    val record1 = records(1).as[Employee]
+    println(record0)
+    println(record1)
   catch
     case error: DiskError         => println("The file could not be read from disk")
     case error: NotFoundError     => println("The file was not found")
