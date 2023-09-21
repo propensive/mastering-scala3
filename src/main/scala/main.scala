@@ -20,8 +20,8 @@ object Opaques:
     given FromString[DiskFile] = identity(_)
 
   extension (file: DiskFile)
-    def readAs[DataType: Parser](): DataType throws NotFoundError | DiskError =
-      process(read().mkString.parseAs[DataType])
+    def readAs[DataType <: AnyKind]()(using resolver: Resolver[DataType])(using Parser[resolver.DataType]): resolver.DataType throws NotFoundError | DiskError =
+      process(read().mkString.parseAs[resolver.DataType])
 
     def process[ResultType](block: FileChannel ?=> ResultType): ResultType throws NotFoundError | DiskError =
       val reader: RandomAccessFile = try RandomAccessFile(file, "r") catch case error: Exception => throw NotFoundError()
@@ -35,8 +35,19 @@ object Opaques:
 
 export Opaques.DiskFile
 
+object Resolver:
+  given Resolver[List] with
+    type DataType = List[String]
+  
+  given Resolver[String] with
+    type DataType = String
+
+trait Resolver[Type <: AnyKind]:
+  type DataType
+
 object Parser:
   given string: Parser[String] = _.mkString
+  given listString: Parser[List[String]] = List(_)
   
   given int: (Parser[Int] throws BadIntError) = string =>
     try string.toInt catch Exception => throw BadIntError(string)
