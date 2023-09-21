@@ -2,14 +2,16 @@ package training
 
 import scala.language.experimental.saferExceptions
 
+case class Employee(name: String, age: Int, role: Role)
+
 @main
 def run(): Unit =
   try
     val file = DiskFile("records.tsv")
     type MyRow = Row { def name: String; def age: Int; def role: Role }
     val records = file.readAs[Tsv[MyRow]]()
-    val record0 = records(0)
-    val record1 = records(1)
+    val record0 = records(0).as[Employee]
+    val record1 = records(1).as[Employee]
     println(record0)
     println(record1)
   catch

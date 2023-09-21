@@ -5,6 +5,7 @@ import java.io.*, java.nio.*, file.*, channels.*, charset.*
 import scala.util.chaining.*
 import scala.compiletime.*
 import scala.quoted.*
+import scala.deriving.*
 import scala.util.CommandLineParser.FromString
 
 import scala.language.experimental.saferExceptions
@@ -73,6 +74,18 @@ object Tsv:
 
 case class Row(indices: Map[String, Int], row: IArray[String]):
   def apply(field: String): String = row(indices(field))
+
+  transparent inline def fields[ElementTypes <: Tuple, LabelTypes <: Tuple]: Tuple =
+    inline erasedValue[ElementTypes] match
+      case _: (headType *: tailType) => inline erasedValue[LabelTypes] match
+        case _: (headLabel *: tailLabel) => inline valueOf[headLabel].asMatchable match
+          case label: String =>
+            summonInline[Parser[headType]].parse(row(indices(label))) *: fields[tailType, tailLabel]
+
+      case _ => EmptyTuple
+
+  transparent inline def as[RowType](using mirror: Mirror.ProductOf[RowType]): mirror.MirroredMonoType =
+    mirror.fromProduct(fields[mirror.MirroredElemTypes, mirror.MirroredElemLabels])
 
 case class Tsv[RowType](headings: List[String], rows: List[IArray[String]]):
   private val indices: Map[String, Int] = headings.zipWithIndex.to(Map)
