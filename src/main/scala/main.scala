@@ -6,15 +6,33 @@ import scala.util.chaining.*
 import scala.compiletime.*
 import scala.util.CommandLineParser.FromString
 
+import scala.quoted.*
+
 import scala.language.experimental.saferExceptions
 import scala.language.experimental.erasedDefinitions
 import scala.language.dynamics
+
+object Macros:
+  def checkFilename(name: Expr[String])(using Quotes): Expr[DiskFile] =
+    import quotes.reflect.*
+    val nameString = name.valueOrAbort
+    println(name)
+    if nameString.contains(" ")
+    then quotes.reflect.report.errorAndAbort(s"The filename '${nameString}' contains a space")
+    
+    '{DiskFile.unsafe($name)}
+
+
 
 object Opaques:
   opaque type DiskFile = String
 
   object DiskFile:
-    def apply(name: String): DiskFile = name
+    inline def apply(inline name: String): DiskFile =
+      ${Macros.checkFilename('name)}
+
+    def unsafe(name: String): DiskFile = name
+
     given FromString[DiskFile] = identity(_)
 
   extension (file: DiskFile)
@@ -44,26 +62,6 @@ trait Parser[+DataType]:
 
 extension (string: String)
   def parseAs[ResultType](using parser: Parser[ResultType]): ResultType = parser.parse(string)
-
-@main
-def run(): Unit =
-  try
-    val file = path"records.tsv"
-    type MyRow = Row { def name: String; def age: Int; def role: Role }
-    val records = file.readAs[Tsv[MyRow]]()
-    val record0 = records(0)
-    val record1 = records(1)
-    println(record0)
-    println(record1)
-    println(record0.role)
-  catch
-    case error: DiskError         => println("The file could not be read from disk")
-    case error: NotFoundError     => println("The file was not found")
-    case error: TsvError          => println("The TSV file contained rows of different lengths")
-    case error: BadIntError       => println(s"The value ${error.string} is not a valid integer")
-    case error: BadRoleError      => println(s"The row contained an invalid role")
-    case error: BadFilenameError  => println(s"The filename is not valid")
-    case error: UnknownFieldError => println(s"The field ${error.field} does not exist")
 
 inline def channel: FileChannel = summonInline[FileChannel]
 
@@ -110,11 +108,6 @@ object Role:
 
 enum Role:
   case Trainer, Developer, President
-
-extension (context: StringContext)
-  def path(): DiskFile throws BadFilenameError =
-    if context.parts.head.matches("[.a-z]+") then DiskFile(context.parts.head)
-    else throw BadFilenameError()
 
 case class DiskError() extends Exception
 case class NotFoundError() extends Exception
