@@ -36,9 +36,27 @@ object Macros:
     val schemaName: String = context.valueOrAbort.parts.head
     val schema = DiskFile.unsafe(schemaName).readAs[String]()
 
-    schema match
-      case "String\tInt\tRole" => '{new Schema[Row { def name: String; def role: Role; def age: Int }]()}
-      case "String\tInt" => '{new Schema[Row { def name: String; def role: Role; def age: Int }]()}
+    def make(typeNames: List[String], iarray: Expr[IArray[Any]], n: Int = 0): Expr[Tuple] = typeNames match
+      case Nil          =>
+        '{EmptyTuple}
+
+      case head :: tail =>
+        val tailExpr = make(tail, iarray, n + 1)
+        head match
+          case "String" =>
+            '{$iarray(${Expr(n)}).asInstanceOf[String] *: $tailExpr}
+          
+          case "Int" =>
+            '{$iarray(${Expr(n)}).asInstanceOf[Int] *: $tailExpr}
+          
+          case "Role" =>
+            '{$iarray(${Expr(n)}).asInstanceOf[Role] *: $tailExpr}
+
+    val accessor = '{ (iarray: IArray[Any]) => ${
+      make(schema.split("\t").nn.map(_.nn).to(List), 'iarray, 0)
+    }}
+
+    '{new Schema($accessor)}
 
 
 object Opaques:
@@ -93,7 +111,7 @@ def read()(using FileChannel): List[String] =
   recur()
 
 object Tsv:
-  def parse[RowType <: Row](string: String): Tsv[RowType] throws TsvError | BadIntError | BadRoleError =
+  def parse(string: String): Tsv throws TsvError | BadIntError | BadRoleError =
     val rows = string.split("\n").nn.to(List).map(_.nn)
     val data = rows.map(_.split("\t").nn.to(List).map(_.nn))
 
@@ -109,16 +127,15 @@ object Tsv:
 
     Tsv(data.head, data2.map(IArray.from(_)))
 
-  given [RowType <: Row]: (Parser[Tsv[RowType]] throws TsvError | BadIntError | BadRoleError) =
-    parse[RowType](_)
+  given (Parser[Tsv] throws TsvError | BadIntError | BadRoleError) =
+    parse(_)
 
 case class Row(indices: Map[String, Int], row: IArray[Any]) extends Selectable:
   def apply(field: String): Any = row(indices(field))
   def selectDynamic(field: String): Any = apply(field)
 
-case class Tsv[RowType <: Row](headings: List[String], rows: List[IArray[Any]]):
+case class Tsv(headings: List[String], rows: List[IArray[Any]]):
   private val indices: Map[String, Int] = headings.zipWithIndex.to(Map)
-  def apply(n: Int): RowType = Row(indices, rows(n)).asInstanceOf[RowType]
 
 object Role:
   given (Parser[Role] throws BadRoleError) = try valueOf(_) catch Exception => throw BadRoleError()
@@ -134,10 +151,10 @@ case class BadIntError(string: String) extends Exception
 case class BadRoleError() extends Exception
 case class BadFilenameError() extends Exception
 
-class Schema[RowType <: Row]():
-  def read(diskFile: DiskFile): Tsv[RowType] =
+class Schema[RowType <: Tuple](accessor: IArray[Any] => RowType):
+  def read(diskFile: DiskFile): List[RowType] =
     import unsafeExceptions.canThrowAny
-    diskFile.readAs[Tsv[RowType]]()
+    diskFile.readAs[Tsv]().rows.map(accessor)
 
 extension (inline context: StringContext)
   transparent inline def path(): Any = ${Macros.checkFilename('context)}

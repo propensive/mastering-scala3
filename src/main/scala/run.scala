@@ -16,7 +16,6 @@ def run(): Unit =
     val record1 = records(1)
     println(record0)
     println(record1)
-    println(record0.age)
 
   catch
     case error: DiskError         => println("The file could not be read from disk")
