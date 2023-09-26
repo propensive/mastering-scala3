@@ -8,15 +8,12 @@ import scala.compiletime.*
 @main
 def run(): Unit =
   try
-    val file: DiskFile = path"records.tsv"
-
     val records = schema"schema.tsv".read(path"records.tsv")
 
     val record0 = records(0)
     val record1 = records(1)
     println(record0)
     println(record1)
-    println(record0.age)
 
   catch
     case error: DiskError         => println("The file could not be read from disk")

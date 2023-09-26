@@ -36,9 +36,12 @@ object Macros:
     val schemaName: String = context.valueOrAbort.parts.head
     val schema = DiskFile.unsafe(schemaName).readAs[String]()
 
+    schema.split("\t").nn.map(_.nn).foreach(println)
+
     schema match
-      case "String\tInt\tRole" => '{new Schema[Row { def name: String; def role: Role; def age: Int }]()}
-      case "String\tInt" => '{new Schema[Row { def name: String; def role: Role; def age: Int }]()}
+      case "String\tInt\tRole" => '{new Schema[(String, Int, Role)]()}
+      case "String\tInt\tString" => '{new Schema[(String, Int, String)]()}
+      case "String\tInt"       => '{new Schema[(String, Int)]()}
 
 
 object Opaques:
@@ -93,7 +96,7 @@ def read()(using FileChannel): List[String] =
   recur()
 
 object Tsv:
-  def parse[RowType <: Row](string: String): Tsv[RowType] throws TsvError | BadIntError | BadRoleError =
+  def parse[RowType <: Row](string: String): Tsv throws TsvError | BadIntError | BadRoleError =
     val rows = string.split("\n").nn.to(List).map(_.nn)
     val data = rows.map(_.split("\t").nn.to(List).map(_.nn))
 
@@ -109,16 +112,15 @@ object Tsv:
 
     Tsv(data.head, data2.map(IArray.from(_)))
 
-  given [RowType <: Row]: (Parser[Tsv[RowType]] throws TsvError | BadIntError | BadRoleError) =
-    parse[RowType](_)
+  given (Parser[Tsv] throws TsvError | BadIntError | BadRoleError) = parse(_)
 
 case class Row(indices: Map[String, Int], row: IArray[Any]) extends Selectable:
   def apply(field: String): Any = row(indices(field))
   def selectDynamic(field: String): Any = apply(field)
 
-case class Tsv[RowType <: Row](headings: List[String], rows: List[IArray[Any]]):
+case class Tsv(headings: List[String], rows: List[IArray[Any]]):
   private val indices: Map[String, Int] = headings.zipWithIndex.to(Map)
-  def apply(n: Int): RowType = Row(indices, rows(n)).asInstanceOf[RowType]
+  def apply(n: Int): Row = Row(indices, rows(n))
 
 object Role:
   given (Parser[Role] throws BadRoleError) = try valueOf(_) catch Exception => throw BadRoleError()
@@ -134,10 +136,10 @@ case class BadIntError(string: String) extends Exception
 case class BadRoleError() extends Exception
 case class BadFilenameError() extends Exception
 
-class Schema[RowType <: Row]():
-  def read(diskFile: DiskFile): Tsv[RowType] =
+class Schema[RowType <: Tuple]():
+  def read(diskFile: DiskFile): Tsv =
     import unsafeExceptions.canThrowAny
-    diskFile.readAs[Tsv[RowType]]()
+    diskFile.readAs[Tsv]()
 
 extension (inline context: StringContext)
   transparent inline def path(): Any = ${Macros.checkFilename('context)}
