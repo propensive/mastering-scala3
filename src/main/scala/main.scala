@@ -12,24 +12,41 @@ import scala.language.experimental.saferExceptions
 import scala.language.experimental.erasedDefinitions
 import scala.language.dynamics
 
+inline def percent(inline n: Int): Unit = ${Macros.percent('n)}
+
 object Macros:
-  def checkFilename(name: Expr[String])(using Quotes): Expr[DiskFile] =
+
+  def percent(n: Expr[Int])(using Quotes): Expr[Unit] =
     import quotes.reflect.*
-    val nameString = name.valueOrAbort
-    println(name)
+    val value = n.valueOrAbort
+    if value > 100 || value < 0 then quotes.reflect.report.errorAndAbort("Bad percentage")
+    '{()}
+
+  def checkFilename(context: Expr[StringContext])(using Quotes): Expr[Any] =
+    import quotes.reflect.*
+    val nameString = context.valueOrAbort.parts.head
     if nameString.contains(" ")
     then quotes.reflect.report.errorAndAbort(s"The filename '${nameString}' contains a space")
     
-    '{DiskFile.unsafe($name)}
+    if nameString.startsWith("http") then '{new java.net.URL(${Expr(nameString)})}
+    else '{DiskFile.unsafe(${Expr(nameString)})}
 
+  def makeSchema(context: Expr[StringContext])(using Quotes): Expr[Any] =
+    import unsafeExceptions.canThrowAny
+    val schemaName: String = context.valueOrAbort.parts.head
+    val schema = DiskFile.unsafe(schemaName).readAs[String]()
+
+    schema match
+      case "String\tInt\tRole" => '{new Schema[Row { def name: String; def role: Role; def age: Int }]()}
+      case "String\tInt" => '{new Schema[Row { def name: String; def role: Role; def age: Int }]()}
 
 
 object Opaques:
   opaque type DiskFile = String
 
   object DiskFile:
-    inline def apply(inline name: String): DiskFile =
-      ${Macros.checkFilename('name)}
+    // inline def apply(inline name: String): DiskFile =
+    //   ${Macros.checkFilename('name)}
 
     def unsafe(name: String): DiskFile = name
 
@@ -117,3 +134,11 @@ case class BadIntError(string: String) extends Exception
 case class BadRoleError() extends Exception
 case class BadFilenameError() extends Exception
 
+class Schema[RowType <: Row]():
+  def read(diskFile: DiskFile): Tsv[RowType] =
+    import unsafeExceptions.canThrowAny
+    diskFile.readAs[Tsv[RowType]]()
+
+extension (inline context: StringContext)
+  transparent inline def path(): Any = ${Macros.checkFilename('context)}
+  transparent inline def schema(): Any = ${Macros.makeSchema('context)}
