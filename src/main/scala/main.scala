@@ -57,15 +57,15 @@ object Macros:
 
       case head :: tail =>
         val tailExpr = make(tail, iarray, n + 1)
-        head match
-          case "String" =>
-            '{$iarray(${Expr(n)}).asInstanceOf[String] *: $tailExpr}
-          
-          case "Int" =>
-            '{$iarray(${Expr(n)}).asInstanceOf[Int] *: $tailExpr}
-          
-          case "Role" =>
-            '{$iarray(${Expr(n)}).asInstanceOf[Role] *: $tailExpr}
+        
+        val headType = head match
+          case "String" => Type.of[String]
+          case "Int"    => Type.of[Int]
+          case "Role"   => Type.of[Role]
+
+        headType match
+          case '[headType] =>
+            '{$iarray(${Expr(n)}).asInstanceOf[headType] *: $tailExpr}
 
     makeType(types) match
       case '[type tupleType <: Tuple; tupleType] =>
