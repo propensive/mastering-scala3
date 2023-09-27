@@ -35,6 +35,21 @@ object Macros:
     import unsafeExceptions.canThrowAny
     val schemaName: String = context.valueOrAbort.parts.head
     val schema = DiskFile.unsafe(schemaName).readAs[String]()
+    val types = schema.split("\t").nn.map(_.nn).to(List)
+
+    def makeType(typeNames: List[String]): Type[?] = typeNames match
+      case Nil          => Type.of[EmptyTuple]
+      case head :: tail =>
+        val tailType = makeType(tail)
+        val headType = head match
+          case "String" => Type.of[String]
+          case "Int"    => Type.of[Int]
+          case "Role"   => Type.of[Role]
+        
+        tailType match
+          case '[type tupleType <: Tuple; tupleType] =>
+            headType match
+              case '[headType] => Type.of[headType *: tupleType]
 
     def make(typeNames: List[String], iarray: Expr[IArray[Any]], n: Int = 0): Expr[Tuple] = typeNames match
       case Nil          =>
@@ -52,12 +67,9 @@ object Macros:
           case "Role" =>
             '{$iarray(${Expr(n)}).asInstanceOf[Role] *: $tailExpr}
 
-    val accessor = '{ (iarray: IArray[Any]) => ${
-      make(schema.split("\t").nn.map(_.nn).to(List), 'iarray, 0)
-    }}
-
-    '{new Schema($accessor)}
-
+    makeType(types) match
+      case '[type tupleType <: Tuple; tupleType] =>
+        '{ new Schema[tupleType]((iarray: IArray[Any]) => ${make(types, 'iarray, 0)}.asInstanceOf[tupleType])}
 
 object Opaques:
   opaque type DiskFile = String
@@ -151,7 +163,7 @@ case class BadIntError(string: String) extends Exception
 case class BadRoleError() extends Exception
 case class BadFilenameError() extends Exception
 
-class Schema[RowType <: Tuple](accessor: IArray[Any] => RowType):
+class Schema[+RowType <: Tuple](accessor: IArray[Any] => RowType):
   def read(diskFile: DiskFile): List[RowType] =
     import unsafeExceptions.canThrowAny
     diskFile.readAs[Tsv]().rows.map(accessor)

@@ -12,6 +12,7 @@ def run(): Unit =
 
     val records = schema"schema.tsv".read(path"records.tsv")
 
+
     val record0 = records(0)
     val record1 = records(1)
     println(record0)
