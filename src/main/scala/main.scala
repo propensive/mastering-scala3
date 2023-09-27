@@ -32,52 +32,34 @@ object Macros:
     else '{DiskFile.unsafe(${Expr(nameString)})}
 
   def makeSchema(context: Expr[StringContext])(using Quotes): Expr[Any] =
+    import quotes.reflect.*
     import unsafeExceptions.canThrowAny
+    
     val schemaName: String = context.valueOrAbort.parts.head
     val schema = DiskFile.unsafe(schemaName).readAs[String]()
     val types = schema.split("\t").nn.map(_.nn).to(List)
 
-    def makeType(typeNames: List[String]): Type[?] = typeNames match
-      case Nil          => Type.of[EmptyTuple]
-      case head :: tail =>
-        val tailType = makeType(tail)
-        val headType = head match
-          case "String" => Type.of[String]
-          case "Int"    => Type.of[Int]
-          case "Role"   => Type.of[Role]
-        
-        tailType match
-          case '[type tupleType <: Tuple; tupleType] =>
-            headType match
-              case '[headType] => Type.of[headType *: tupleType]
-
-    def make(typeNames: List[String], iarray: Expr[IArray[Any]], n: Int = 0): Expr[Tuple] = typeNames match
+    def makeType(typeNames: List[String]): TypeRepr = typeNames match
       case Nil          =>
-        '{EmptyTuple}
-
+        TypeRepr.of[Row]
+      
       case head :: tail =>
-        val tailExpr = make(tail, iarray, n + 1)
+        head match
+          case s"$id:$typeName" =>
+            val newType = typeName match
+              case "String" => TypeRepr.of[String]
+              case "Int"    => TypeRepr.of[Int]
+              case "Role"   => TypeRepr.of[Role]
+            
+            Refinement(makeType(tail), id, newType)
         
-        val headType = head match
-          case "String" => Type.of[String]
-          case "Int"    => Type.of[Int]
-          case "Role"   => Type.of[Role]
-
-        headType match
-          case '[headType] =>
-            '{$iarray(${Expr(n)}).asInstanceOf[headType] *: $tailExpr}
-
-    makeType(types) match
-      case '[type tupleType <: Tuple; tupleType] =>
-        '{ new Schema[tupleType]((iarray: IArray[Any]) => ${make(types, 'iarray, 0)}.asInstanceOf[tupleType])}
+    makeType(types).asType match
+      case '[type rowType <: Row; rowType] => '{new Schema[rowType]()}
 
 object Opaques:
   opaque type DiskFile = String
 
   object DiskFile:
-    // inline def apply(inline name: String): DiskFile =
-    //   ${Macros.checkFilename('name)}
-
     def unsafe(name: String): DiskFile = name
 
     given FromString[DiskFile] = identity(_)
@@ -146,8 +128,9 @@ case class Row(indices: Map[String, Int], row: IArray[Any]) extends Selectable:
   def apply(field: String): Any = row(indices(field))
   def selectDynamic(field: String): Any = apply(field)
 
-case class Tsv(headings: List[String], rows: List[IArray[Any]]):
+case class Tsv(headings: List[String], data: List[IArray[Any]]):
   private val indices: Map[String, Int] = headings.zipWithIndex.to(Map)
+  def rows = data.map { row => Row(indices, row) }
 
 object Role:
   given (Parser[Role] throws BadRoleError) = try valueOf(_) catch Exception => throw BadRoleError()
@@ -163,10 +146,10 @@ case class BadIntError(string: String) extends Exception
 case class BadRoleError() extends Exception
 case class BadFilenameError() extends Exception
 
-class Schema[+RowType <: Tuple](accessor: IArray[Any] => RowType):
+class Schema[+RowType <: Row]():
   def read(diskFile: DiskFile): List[RowType] =
     import unsafeExceptions.canThrowAny
-    diskFile.readAs[Tsv]().rows.map(accessor)
+    diskFile.readAs[Tsv]().rows.map(_.asInstanceOf[RowType])
 
 extension (inline context: StringContext)
   transparent inline def path(): Any = ${Macros.checkFilename('context)}
